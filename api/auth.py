@@ -1,17 +1,33 @@
-import requests
-import time
+"""
+认证模块 - 微信授权登录
+
+登录流程（微信官方文档）:
+1. 小程序前端调用 wx.login() 获取临时登录凭证 code
+2. 前端将 code 发送到后端 POST /api/auth/wx-login
+3. 后端调用微信 auth.code2Session 接口换取 openid + session_key
+4. 后端根据 openid 查找或创建用户，返回 JWT token
+
+参考文档:
+- https://developers.weixin.qq.com/miniprogram/dev/framework/open-ability/login.html
+- https://developers.weixin.qq.com/miniprogram/dev/OpenApiDoc/user-login/code2Session.html
+"""
 import datetime
+import requests
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import create_access_token, jwt_required, get_jwt_identity
-from app import db, redis_client
-from app.models import User, SystemConfig
-import json
+from app import db
+from app.models import User
 
 bp = Blueprint('auth', __name__, url_prefix='/auth')
 
 
 def wx_code2session(code):
-    """调用微信code2Session接口"""
+    """
+    调用微信 auth.code2Session 接口
+    接口: GET https://api.weixin.qq.com/sns/jscode2session
+    参数: appid, secret, js_code, grant_type=authorization_code
+    返回: {openid, session_key, unionid?}
+    """
     from config import Config
     url = Config.WECHAT_CODE2SESSION_URL
     params = {
@@ -21,34 +37,50 @@ def wx_code2session(code):
         'grant_type': 'authorization_code'
     }
     resp = requests.get(url, params=params, timeout=10)
-    return resp.json()  # {openid, session_key, unionid}
+    return resp.json()
 
 
 @bp.route('/wx-login', methods=['POST'])
 def wx_login():
     """
     微信小程序登录接口
-    请求体: {code: 'xxx', nickname: 'xxx', avatar_url: 'xxx', gender: 0, school: 'xxx'}
-    本地开发模式下(WECHAT_APPID=wx_test_appid)会自动绕过微信验证
+    请求体: {
+        "code": "wx.login()获取的临时凭证",
+        "nickname": "用户昵称",
+        "avatar_url": "头像URL",
+        "gender": 0,
+        "school": "学校"
+    }
+    返回: {
+        "access_token": "JWT token",
+        "user": {用户信息}
+    }
+
+    开发模式: WECHAT_APPID 以 wx_test_ 开头时，跳过微信API，直接用 code 作为 openid
     """
     data = request.get_json()
     code = data.get('code')
     if not code:
-        return jsonify({'code': 400, 'message': '缺少code参数'}), 400
+        return jsonify({'code': 400, 'message': 'missing code parameter'}), 400
 
     from config import Config
 
-    # 开发模式：AppID是测试占位值时，直接用code作为openid，不调微信API
-    if Config.WECHAT_APPID.startswith('wx_test_') or Config.WECHAT_APPID == 'wx_test_appid':
+    # 开发模式：AppID 是测试占位值时，直接用 code 作为 openid
+    if Config.WECHAT_APPID.startswith('wx_test_'):
         openid = 'dev_openid_' + code
         unionid = ''
     else:
-        # 正式模式：调用微信code2Session接口
+        # 正式模式：调用微信 code2Session 接口
         wx_result = wx_code2session(code)
-        if 'errcode' in wx_result:
-            return jsonify({'code': 500, 'message': '微信登录失败: %s' % wx_result.get('errmsg')}), 500
+        if 'errcode' in wx_result and wx_result['errcode'] != 0:
+            return jsonify({
+                'code': 500,
+                'message': 'wechat login failed: %s' % wx_result.get('errmsg', '')
+            }), 500
         openid = wx_result.get('openid')
         unionid = wx_result.get('unionid', '')
+        if not openid:
+            return jsonify({'code': 500, 'message': 'wechat login failed: no openid'}), 500
 
     # 查找或创建用户
     user = User.query.filter_by(openid=openid).first()
@@ -56,7 +88,7 @@ def wx_login():
         user = User(
             openid=openid,
             unionid=unionid,
-            nickname=data.get('nickname', '校园同学'),
+            nickname=data.get('nickname', '') or 'campus_user',
             avatar_url=data.get('avatar_url', ''),
             gender=data.get('gender', 0),
             school=data.get('school', ''),
@@ -64,18 +96,20 @@ def wx_login():
         db.session.add(user)
         db.session.commit()
 
-    # 更新用户信息(昵称头像可能变化)
-    user.nickname = data.get('nickname', user.nickname)
-    user.avatar_url = data.get('avatar_url', user.avatar_url)
+    # 更新用户信息（昵称头像可能变化）
+    if data.get('nickname'):
+        user.nickname = data['nickname']
+    if data.get('avatar_url'):
+        user.avatar_url = data['avatar_url']
     user.last_active_at = datetime.datetime.utcnow()
     db.session.commit()
 
-    # 生成JWT token
+    # 生成 JWT token
     access_token = create_access_token(identity=str(user.id))
 
     return jsonify({
         'code': 200,
-        'message': '登录成功',
+        'message': 'login success',
         'data': {
             'access_token': access_token,
             'user': {
@@ -87,8 +121,6 @@ def wx_login():
                 'exp': user.exp,
                 'post_count': user.post_count,
                 'role': user.role,
-                'show_contact': user.show_contact,
-                'contact_info': user.contact_info if user.show_contact else '',
             }
         }
     })
@@ -101,7 +133,7 @@ def get_profile():
     user_id = int(get_jwt_identity())
     user = User.query.get(user_id)
     if not user:
-        return jsonify({'code': 404, 'message': '用户不存在'}), 404
+        return jsonify({'code': 404, 'message': 'user not found'}), 404
 
     return jsonify({
         'code': 200,
@@ -124,89 +156,14 @@ def get_profile():
     })
 
 
-@bp.route('/signup', methods=['POST'])
-def signup():
-    """用户名密码注册（本地测试用）"""
-    data = request.get_json()
-    username = data.get('username', '').strip()
-    password = data.get('password', '')
-    nickname = data.get('nickname', '校园同学')
-
-    if not username or not password:
-        return jsonify({'code': 400, 'message': '用户名和密码不能为空'}), 400
-    if len(password) < 4:
-        return jsonify({'code': 400, 'message': '密码至少4位'}), 400
-    if User.query.filter_by(username=username).first():
-        return jsonify({'code': 400, 'message': '用户名已存在'}), 400
-
-    from werkzeug.security import generate_password_hash
-    user = User(
-        username=username,
-        password_hash=generate_password_hash(password),
-        nickname=nickname,
-        school=data.get('school', ''),
-    )
-    db.session.add(user)
-    db.session.commit()
-
-    access_token = create_access_token(identity=str(user.id))
-    return jsonify({
-        'code': 201,
-        'message': '注册成功',
-        'data': {
-            'access_token': access_token,
-            'user': {
-                'id': user.id,
-                'nickname': user.nickname,
-                'avatar_url': user.avatar_url,
-                'school': user.school,
-                'level': user.level,
-                'exp': user.exp,
-            }
-        }
-    }), 201
-
-
-@bp.route('/signin', methods=['POST'])
-def signin():
-    """用户名密码登录（本地测试用）"""
-    data = request.get_json()
-    username = data.get('username', '').strip()
-    password = data.get('password', '')
-
-    if not username or not password:
-        return jsonify({'code': 400, 'message': '用户名和密码不能为空'}), 400
-
-    user = User.query.filter_by(username=username).first()
-    if not user or not user.check_password(password):
-        return jsonify({'code': 401, 'message': '用户名或密码错误'}), 401
-
-    access_token = create_access_token(identity=str(user.id))
-    return jsonify({
-        'code': 200,
-        'message': '登录成功',
-        'data': {
-            'access_token': access_token,
-            'user': {
-                'id': user.id,
-                'nickname': user.nickname,
-                'avatar_url': user.avatar_url,
-                'school': user.school,
-                'level': user.level,
-                'exp': user.exp,
-            }
-        }
-    })
-
-
 @bp.route('/profile', methods=['PUT'])
 @jwt_required()
 def update_profile():
-    """更新用户信息(昵称、学校、联系方式等)"""
+    """更新用户信息（昵称、学校、联系方式等）"""
     user_id = int(get_jwt_identity())
     user = User.query.get(user_id)
     if not user:
-        return jsonify({'code': 404, 'message': '用户不存在'}), 404
+        return jsonify({'code': 404, 'message': 'user not found'}), 404
 
     data = request.get_json()
     if 'nickname' in data:
@@ -221,4 +178,4 @@ def update_profile():
         user.gender = int(data['gender'])
 
     db.session.commit()
-    return jsonify({'code': 200, 'message': '更新成功'})
+    return jsonify({'code': 200, 'message': 'update success'})

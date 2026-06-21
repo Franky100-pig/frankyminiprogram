@@ -56,11 +56,11 @@ with app.app_context():
     db.session.commit()
     print(f"  ✓ 等级配置已初始化")
 
-    # 4. 插入默认关键词
+    # 4. 插入默认关键词 (level: 1=警告/人工审核, 2=拒绝)
     keywords = [
-        ('垃圾', 'warning', '测试'),
-        ('广告', 'reject', '垃圾信息'),
-        ('测试', 'warning', '测试'),
+        ('垃圾', 1, '测试'),
+        ('广告', 2, '垃圾信息'),
+        ('测试', 1, '测试'),
     ]
     for word, level, category in keywords:
         if not Keyword.query.filter_by(keyword=word).first():

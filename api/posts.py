@@ -1,6 +1,6 @@
 from flask import Blueprint, request, jsonify, current_app
 from flask_jwt_extended import jwt_required, get_jwt_identity
-from app import db, redis_client
+from app import db
 from app.models import Post, Category, User, Like, ReviewLog, Notification, LevelConfig
 from services.keyword_filter import check_post_content, async_refresh
 from datetime import datetime
