@@ -15,7 +15,7 @@ def create_comment():
     user_id = int(get_jwt_identity())
     user = User.query.get(user_id)
     if not user or user.status == 0:
-        return jsonify({'code': 403, 'message': '用户已被禁用'}), 403
+        return jsonify({'msg': '用户已被禁用'}), 403
 
     data = request.get_json()
     post_id = int(data.get('post_id', 0))
@@ -24,11 +24,11 @@ def create_comment():
     reply_to_user_id = int(data.get('reply_to_user_id', 0)) if data.get('reply_to_user_id') else None
 
     if not post_id or not content:
-        return jsonify({'code': 400, 'message': '参数不完整'}), 400
+        return jsonify({'msg': '参数不完整'}), 400
 
     post = Post.query.get(post_id)
     if not post or post.status != 1:
-        return jsonify({'code': 404, 'message': '帖子不存在或已下架'}), 404
+        return jsonify({'msg': '帖子不存在或已下架'}), 404
 
     # 关键词检查(评论内容)
     from config import Config
@@ -37,7 +37,7 @@ def create_comment():
         check_result = check_text(content)
         if not check_result['passed']:
             status = 2  # 拒绝
-            return jsonify({'code': 200, 'message': '评论包含不当内容', 'data': {'status': 2}}), 200
+            return jsonify({'msg': '评论包含不当内容', 'status': 2})
 
     comment = Comment(
         post_id=post_id,
@@ -70,7 +70,7 @@ def create_comment():
     db.session.add(notif)
     db.session.commit()
 
-    return jsonify({'code': 200, 'message': '评论成功', 'data': {'comment_id': comment.id}})
+    return jsonify({'msg': '评论成功', 'comment_id': comment.id})
 
 
 @bp.route('/<int:post_id>/comments', methods=['GET'])
@@ -114,4 +114,4 @@ def get_comments(post_id):
         }
 
     result = [comment_to_dict(c) for c in pagination.items]
-    return jsonify({'code': 200, 'data': {'comments': result, 'has_more': pagination.has_next}})
+    return jsonify({'comments': result, 'has_more': pagination.has_next})

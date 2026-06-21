@@ -15,7 +15,7 @@ def admin_required(fn):
         user_id = int(get_jwt_identity())
         user = User.query.get(user_id)
         if not user or user.role < 1:
-            return jsonify({'code': 403, 'message': '需要管理员权限'}), 403
+            return jsonify({'msg': '需要管理员权限'}), 403
         return fn(*args, **kwargs)
     return wrapper
 
@@ -45,7 +45,7 @@ def get_pending_posts():
             'created_at': p.created_at.isoformat() if p.created_at else '',
         })
 
-    return jsonify({'code': 200, 'data': {'posts': result, 'total': pagination.total, 'has_more': pagination.has_next}})
+    return jsonify({'posts': result, 'total': pagination.total, 'has_more': pagination.has_next})
 
 
 @bp.route('/posts/<int:post_id>/review', methods=['PUT'])
@@ -60,7 +60,7 @@ def review_post(post_id):
 
     post = Post.query.get(post_id)
     if not post:
-        return jsonify({'code': 404, 'message': '帖子不存在'}), 404
+        return jsonify({'msg': '帖子不存在'}), 404
 
     if action == 'approve':
         post.status = 1
@@ -78,7 +78,7 @@ def review_post(post_id):
         post.reviewed_by = user_id
         post.reviewed_at = datetime.utcnow()
     else:
-        return jsonify({'code': 400, 'message': '无效操作'}), 400
+        return jsonify({'msg': '无效操作'}), 400
 
     # 记录审核日志
     log = ReviewLog(post_id=post.id, review_type=2, result=1 if action == 'approve' else 2, reason=reason, reviewer_id=user_id)
@@ -91,7 +91,7 @@ def review_post(post_id):
     db.session.add(notif)
 
     db.session.commit()
-    return jsonify({'code': 200, 'message': '审核完成'})
+    return jsonify({'msg': '审核完成'})
 
 
 @bp.route('/dashboard/stats', methods=['GET'])
@@ -104,9 +104,9 @@ def get_dashboard_stats():
     pending_posts = Post.query.filter_by(status=0).count()
     today_posts = Post.query.filter(Post.created_at >= datetime.utcnow().replace(hour=0, minute=0, second=0)).count()
 
-    return jsonify({'code': 200, 'data': {
+    return jsonify({
         'total_users': total_users,
         'total_posts': total_posts,
         'pending_posts': pending_posts,
         'today_posts': today_posts,
-    }})
+    })

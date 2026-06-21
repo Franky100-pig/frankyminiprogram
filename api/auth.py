@@ -61,7 +61,7 @@ def wx_login():
     data = request.get_json()
     code = data.get('code')
     if not code:
-        return jsonify({'code': 400, 'message': 'missing code parameter'}), 400
+        return jsonify({'msg': 'missing code parameter'}), 400
 
     from config import Config
 
@@ -73,14 +73,11 @@ def wx_login():
         # 正式模式：调用微信 code2Session 接口
         wx_result = wx_code2session(code)
         if 'errcode' in wx_result and wx_result['errcode'] != 0:
-            return jsonify({
-                'code': 500,
-                'message': 'wechat login failed: %s' % wx_result.get('errmsg', '')
-            }), 500
+            return jsonify({'msg': 'wechat login failed: %s' % wx_result.get('errmsg', '')}), 500
         openid = wx_result.get('openid')
         unionid = wx_result.get('unionid', '')
         if not openid:
-            return jsonify({'code': 500, 'message': 'wechat login failed: no openid'}), 500
+            return jsonify({'msg': 'wechat login failed: no openid'}), 500
 
     # 查找或创建用户
     user = User.query.filter_by(openid=openid).first()
@@ -108,20 +105,16 @@ def wx_login():
     access_token = create_access_token(identity=str(user.id))
 
     return jsonify({
-        'code': 200,
-        'message': 'login success',
-        'data': {
-            'access_token': access_token,
-            'user': {
-                'id': user.id,
-                'nickname': user.nickname,
-                'avatar_url': user.avatar_url,
-                'school': user.school,
-                'level': user.level,
-                'exp': user.exp,
-                'post_count': user.post_count,
-                'role': user.role,
-            }
+        'access_token': access_token,
+        'user': {
+            'id': user.id,
+            'nickname': user.nickname,
+            'avatar_url': user.avatar_url,
+            'school': user.school,
+            'level': user.level,
+            'exp': user.exp,
+            'post_count': user.post_count,
+            'role': user.role,
         }
     })
 
@@ -133,26 +126,23 @@ def get_profile():
     user_id = int(get_jwt_identity())
     user = User.query.get(user_id)
     if not user:
-        return jsonify({'code': 404, 'message': 'user not found'}), 404
+        return jsonify({'msg': 'user not found'}), 404
 
     return jsonify({
-        'code': 200,
-        'data': {
-            'id': user.id,
-            'nickname': user.nickname,
-            'avatar_url': user.avatar_url,
-            'gender': user.gender,
-            'school': user.school,
-            'level': user.level,
-            'exp': user.exp,
-            'post_count': user.post_count,
-            'like_received_count': user.like_received_count,
-            'comment_received_count': user.comment_received_count,
-            'show_contact': user.show_contact,
-            'contact_info': user.contact_info if user.show_contact else '',
-            'role': user.role,
-            'created_at': user.created_at.isoformat() if user.created_at else '',
-        }
+        'id': user.id,
+        'nickname': user.nickname,
+        'avatar_url': user.avatar_url,
+        'gender': user.gender,
+        'school': user.school,
+        'level': user.level,
+        'exp': user.exp,
+        'post_count': user.post_count,
+        'like_received_count': user.like_received_count,
+        'comment_received_count': user.comment_received_count,
+        'show_contact': user.show_contact,
+        'contact_info': user.contact_info if user.show_contact else '',
+        'role': user.role,
+        'created_at': user.created_at.isoformat() if user.created_at else '',
     })
 
 
@@ -163,7 +153,7 @@ def update_profile():
     user_id = int(get_jwt_identity())
     user = User.query.get(user_id)
     if not user:
-        return jsonify({'code': 404, 'message': 'user not found'}), 404
+        return jsonify({'msg': 'user not found'}), 404
 
     data = request.get_json()
     if 'nickname' in data:
@@ -178,4 +168,4 @@ def update_profile():
         user.gender = int(data['gender'])
 
     db.session.commit()
-    return jsonify({'code': 200, 'message': 'update success'})
+    return jsonify({'msg': 'update success'})

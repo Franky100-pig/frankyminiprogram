@@ -15,7 +15,7 @@ def admin_required(fn):
         user_id = int(get_jwt_identity())
         user = User.query.get(user_id)
         if not user or user.role < 1:
-            return jsonify({'code': 403, 'message': '需要管理员权限'}), 403
+            return jsonify({'msg': '需要管理员权限'}), 403
         return fn(*args, **kwargs)
     return wrapper
 
@@ -44,7 +44,7 @@ def get_keywords():
         'created_at': k.created_at.isoformat() if k.created_at else '',
     } for k in pagination.items]
 
-    return jsonify({'code': 200, 'data': {'keywords': result, 'total': pagination.total}})
+    return jsonify({'keywords': result, 'total': pagination.total})
 
 
 @bp.route('/', methods=['POST'])
@@ -59,11 +59,11 @@ def add_keyword():
     level = data.get('level', 1)  # 1警告 2拒绝
 
     if not keyword:
-        return jsonify({'code': 400, 'message': '关键词不能为空'}), 400
+        return jsonify({'msg': '关键词不能为空'}), 400
 
     existing = Keyword.query.filter_by(keyword=keyword).first()
     if existing:
-        return jsonify({'code': 400, 'message': '关键词已存在'}), 400
+        return jsonify({'msg': '关键词已存在'}), 400
 
     kw = Keyword(keyword=keyword, category=category, level=level, created_by=user_id)
     db.session.add(kw)
@@ -72,7 +72,7 @@ def add_keyword():
     # 刷新缓存
     async_refresh()
 
-    return jsonify({'code': 200, 'message': '添加成功'})
+    return jsonify({'msg': '添加成功'})
 
 
 @bp.route('/<int:kw_id>', methods=['DELETE'])
@@ -82,7 +82,7 @@ def delete_keyword(kw_id):
     """删除关键词"""
     kw = Keyword.query.get(kw_id)
     if not kw:
-        return jsonify({'code': 404, 'message': '关键词不存在'}), 404
+        return jsonify({'msg': '关键词不存在'}), 404
 
     db.session.delete(kw)
     db.session.commit()
@@ -90,7 +90,7 @@ def delete_keyword(kw_id):
     # 刷新缓存
     async_refresh()
 
-    return jsonify({'code': 200, 'message': '删除成功'})
+    return jsonify({'msg': '删除成功'})
 
 
 @bp.route('/batch', methods=['POST'])
@@ -117,4 +117,4 @@ def batch_add_keywords():
     if added > 0:
         async_refresh()
 
-    return jsonify({'code': 200, 'message': f'成功添加 {added} 个关键词'})
+    return jsonify({'msg': '成功添加 %d 个关键词' % added})

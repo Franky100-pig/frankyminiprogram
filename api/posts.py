@@ -14,7 +14,7 @@ def get_categories():
     """获取所有分区列表"""
     from app.models import Category
     cats = Category.query.filter_by(is_active=1).order_by(Category.sort_order.asc()).all()
-    return jsonify({'code': 200, 'data': [{'id': c.id, 'name': c.name, 'icon': c.icon} for c in cats]})
+    return jsonify([{'id': c.id, 'name': c.name, 'icon': c.icon} for c in cats])
 
 
 def add_exp(user, amount):
@@ -47,7 +47,7 @@ def search_posts():
     per_page = request.args.get('per_page', 20, type=int)
 
     if not keyword:
-        return jsonify({'code': 400, 'message': '请输入搜索关键词'}), 400
+        return jsonify({'msg': '请输入搜索关键词'}), 400
 
     query = Post.query.filter(Post.status == 1)
     # 搜索标题和内容
@@ -71,15 +71,12 @@ def search_posts():
     result = [p.to_dict(current_user_id=current_user_id) for p in pagination.items]
 
     return jsonify({
-        'code': 200,
-        'data': {
-            'posts': result,
-            'total': pagination.total,
-            'page': page,
-            'per_page': per_page,
-            'has_more': pagination.has_next,
-            'keyword': keyword,
-        }
+        'posts': result,
+        'total': pagination.total,
+        'page': page,
+        'per_page': per_page,
+        'has_more': pagination.has_next,
+        'keyword': keyword,
     })
 
 
@@ -120,14 +117,11 @@ def get_posts():
     result = [p.to_dict(current_user_id=current_user_id) for p in posts]
 
     return jsonify({
-        'code': 200,
-        'data': {
-            'posts': result,
-            'total': pagination.total,
-            'page': page,
-            'per_page': per_page,
-            'has_more': pagination.has_next
-        }
+        'posts': result,
+        'total': pagination.total,
+        'page': page,
+        'per_page': per_page,
+        'has_more': pagination.has_next
     })
 
 
@@ -136,7 +130,7 @@ def get_post_detail(post_id):
     """获取帖子详情"""
     post = Post.query.get(post_id)
     if not post:
-        return jsonify({'code': 404, 'message': '帖子不存在'}), 404
+        return jsonify({'msg': '帖子不存在'}), 404
 
     # 增加浏览数
     post.view_count += 1
@@ -150,7 +144,7 @@ def get_post_detail(post_id):
     except:
         pass
 
-    return jsonify({'code': 200, 'data': post.to_dict(current_user_id=current_user_id)})
+    return jsonify(post.to_dict(current_user_id=current_user_id))
 
 
 @bp.route('/', methods=['POST'])
@@ -160,7 +154,7 @@ def create_post():
     user_id = int(get_jwt_identity())
     user = User.query.get(user_id)
     if not user or user.status == 0:
-        return jsonify({'code': 403, 'message': '用户已被禁用'}), 403
+        return jsonify({'msg': '用户已被禁用'}), 403
 
     data = request.get_json()
     title = data.get('title', '').strip()
@@ -171,14 +165,14 @@ def create_post():
     is_anonymous = data.get('is_anonymous', 0)
 
     if not content:
-        return jsonify({'code': 400, 'message': '帖子内容不能为空'}), 400
+        return jsonify({'msg': '帖子内容不能为空'}), 400
     if not category_id:
-        return jsonify({'code': 400, 'message': '请选择分区'}), 400
+        return jsonify({'msg': '请选择分区'}), 400
 
     # 验证分类是否存在
     cat = Category.query.get(category_id)
     if not cat or cat.is_active == 0:
-        return jsonify({'code': 400, 'message': '分区不存在或已禁用'}), 400
+        return jsonify({'msg': '分区不存在或已禁用'}), 400
 
     # 关键词自动审查
     from config import Config
@@ -209,9 +203,9 @@ def create_post():
             db.session.commit()
 
             if action == 'reject':
-                return jsonify({'code': 200, 'message': '帖子包含不当内容，已自动拒绝', 'data': {'status': 2, 'reason': post.review_reason}})
+                return jsonify({'msg': '帖子包含不当内容，已自动拒绝', 'status': 2, 'reason': post.review_reason})
             else:
-                return jsonify({'code': 200, 'message': '帖子已进入人工审核队列', 'data': {'status': 0}})
+                return jsonify({'msg': '帖子已进入人工审核队列', 'status': 0})
 
     # 通过关键词审查 → 直接发布
     post = Post(
@@ -237,7 +231,7 @@ def create_post():
     db.session.add(log)
     db.session.commit()
 
-    return jsonify({'code': 200, 'message': '发布成功', 'data': {'post_id': post.id, 'status': 1}})
+    return jsonify({'msg': '发布成功', 'post_id': post.id, 'status': 1})
 
 
 @bp.route('/<int:post_id>/like', methods=['POST'])
@@ -247,7 +241,7 @@ def toggle_like_post(post_id):
     user_id = int(get_jwt_identity())
     post = Post.query.get(post_id)
     if not post:
-        return jsonify({'code': 404, 'message': '帖子不存在'}), 404
+        return jsonify({'msg': '帖子不存在'}), 404
 
     existing = Like.query.filter_by(user_id=user_id, target_type=1, target_id=post_id).first()
     if existing:
@@ -255,7 +249,7 @@ def toggle_like_post(post_id):
         db.session.delete(existing)
         post.like_count = max(0, post.like_count - 1)
         db.session.commit()
-        return jsonify({'code': 200, 'message': '已取消点赞', 'data': {'is_liked': False}})
+        return jsonify({'is_liked': False})
     else:
         # 添加点赞
         like = Like(user_id=user_id, target_type=1, target_id=post_id)
@@ -278,4 +272,4 @@ def toggle_like_post(post_id):
             db.session.add(notif)
             db.session.commit()
 
-        return jsonify({'code': 200, 'message': '点赞成功', 'data': {'is_liked': True}})
+        return jsonify({'is_liked': True})
