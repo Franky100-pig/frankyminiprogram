@@ -11,6 +11,7 @@ requests==2.31.0
 python-dotenv==1.0.0
 werkzeug==3.0.1
 flask-cors==4.0.0
+gunicorn==21.2.0
 
 # ===== 以下为可选依赖，正式上线前取消注释 =====
 # Pillow==10.1.0            # 图片处理（发帖上传图片时需要）
