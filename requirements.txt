@@ -1,0 +1,18 @@
+# 校园墙小程序 - 后端依赖（最小可用版本）
+# 先安装核心依赖把后端跑起来，可选依赖后续按需安装
+
+Flask==3.0.0
+flask-sqlalchemy==3.1.1
+flask-migrate==4.0.5
+flask-jwt-extended==4.6.0
+pymysql==1.1.0
+redis==5.0.1
+requests==2.31.0
+python-dotenv==1.0.0
+werkzeug==3.0.1
+flask-cors==4.0.0
+
+# ===== 以下为可选依赖，正式上线前取消注释 =====
+# Pillow==10.1.0            # 图片处理（发帖上传图片时需要）
+# cos-python-sdk-v5==1.9.25 # 腾讯云COS存储（图片视频云端存储）
+# pyahocorasick==2.0.11     # 高性能关键词匹配（关键词很多时使用，少时自动降级）
